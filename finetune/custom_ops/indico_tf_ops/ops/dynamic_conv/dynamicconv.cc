@@ -2,7 +2,7 @@
 #include "../ra/ra.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/platform/default/logging.h"
+#include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/register_types.h"
 
@@ -19,7 +19,7 @@ REGISTER_OP("DynamicConvolution")
     shape_inference::ShapeHandle input_shape;
     TF_RETURN_IF_ERROR(c->WithRank(c->input(0), 3, &input_shape));
     c->set_output(0, input_shape);
-    return Status::OK();
+    return Status();
     });
 
 /*

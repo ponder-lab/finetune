@@ -1,5 +1,4 @@
 import logging
-import functools
 
 import numpy as np
 import tensorflow as tf
@@ -73,7 +72,6 @@ def masked_language_model_op(
         hidden=featurizer_state["sequence_features"],
         train=(mode == tf.estimator.ModeKeys.TRAIN),
     )
-    return language_model_state
 
 
 def fp16_variable_getter(
@@ -237,44 +235,45 @@ def get_model_fn(
 
             if build_target_model:
                 target_model_state = target_model_op(
-                    featurizer_state=featurizer_state,
-                    Y=Y,
-                    params=params,
-                    mode=mode,
+                    featurizer_state=featurizer_state, Y=Y, params=params, mode=mode
                 )
-                if (
-                    mode == tf.estimator.ModeKeys.TRAIN
-                    or mode == tf.estimator.ModeKeys.EVAL
-                ) and Y is not None:
-                    target_loss = tf.cast(
-                        tf.reduce_mean(input_tensor=target_model_state["losses"]),
-                        tf.float32,
-                    )
-                    train_loss += (1 - lm_loss_coef) * target_loss
-                    tf.compat.v1.summary.scalar("TargetModelLoss", target_loss)
-                if mode == tf.estimator.ModeKeys.PREDICT or tf.estimator.ModeKeys.EVAL:
-                    logits = target_model_state["logits"]
-                    predict_params = target_model_state.get("predict_params", {})
-                    if "_threshold" in params:
-                        predict_params["threshold"] = params._threshold
-                    pred_op = predict_op(logits, **predict_params)
+                if target_model_state is not None:
+                    if (
+                        mode == tf.estimator.ModeKeys.TRAIN
+                        or mode == tf.estimator.ModeKeys.EVAL
+                    ) and Y is not None:
+                        target_loss = tf.cast(
+                            tf.reduce_mean(input_tensor=target_model_state["losses"]),
+                            tf.float32,
+                        )
+                        train_loss += (1 - lm_loss_coef) * target_loss
+                        tf.compat.v1.summary.scalar("TargetModelLoss", target_loss)
+                    if (
+                        mode == tf.estimator.ModeKeys.PREDICT
+                        or tf.estimator.ModeKeys.EVAL
+                    ):
+                        logits = target_model_state["logits"]
+                        predict_params = target_model_state.get("predict_params", {})
+                        if "_threshold" in params:
+                            predict_params["threshold"] = params._threshold
+                        pred_op = predict_op(logits, **predict_params)
 
-                    if type(pred_op) == tuple:
-                        pred_op, pred_proba_op = pred_op
-                    else:
-                        pred_proba_op = predict_proba_op(logits, **predict_params)
+                        if type(pred_op) == tuple:
+                            pred_op, pred_proba_op = pred_op
+                        else:
+                            pred_proba_op = predict_proba_op(logits, **predict_params)
 
-                    if type(pred_op) == dict:
-                        predictions.update(pred_op)
-                        predictions.update(pred_proba_op)
-                    else:
-                        predictions[PredictMode.NORMAL] = pred_op
-                        predictions[PredictMode.PROBAS] = pred_proba_op
+                        if type(pred_op) == dict:
+                            predictions.update(pred_op)
+                            predictions.update(pred_proba_op)
+                        else:
+                            predictions[PredictMode.NORMAL] = pred_op
+                            predictions[PredictMode.PROBAS] = pred_proba_op
 
-                    if build_explain:
-                        predictions[PredictMode.EXPLAIN] = target_model_state[
-                            "explanation"
-                        ]
+                        if build_explain:
+                            predictions[PredictMode.EXPLAIN] = target_model_state[
+                                "explanation"
+                            ]
 
             if lm_type is not None:
                 if lm_type.lower() == "lm":
@@ -347,6 +346,7 @@ def get_model_fn(
                 vector_l2=params.vector_l2,
                 accumulate_steps=params.accum_steps,
                 max_training_hours=params.max_training_hours,
+                acc_grads_on_cpu=params.acc_grads_on_cpu,
             )
 
         if mode == tf.estimator.ModeKeys.PREDICT:

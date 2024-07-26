@@ -194,7 +194,6 @@ def get_default_config():
         low_memory_mode=False,
         float_16_predict="auto",
         mixed_precision="auto",
-
         save_adam_vars=False,
         shuffle_buffer_size=100,
         dataset_size=None,
@@ -202,6 +201,7 @@ def get_default_config():
         predict_batch_size="auto",
         visible_gpus=None,  # defaults to all available
         n_epochs="auto",
+        min_steps=None,
         seed=42,
         max_length="auto",
         weight_stddev=0.02,
@@ -215,6 +215,7 @@ def get_default_config():
         collapse_whitespace=False,
         permit_uninitialized=None,
         max_training_hours=None,
+        feature_layer_num=None,
         #
         # Regularization
         embed_p_drop=0.1,
@@ -257,6 +258,7 @@ def get_default_config():
         lr_warmup=0.002,
         max_grad_norm=1.0,
         accum_steps=1,
+        acc_grads_on_cpu=False,
         #
         # Language Model Settings
         lm_loss_coef=0.0,
@@ -283,6 +285,7 @@ def get_default_config():
         use_gpu_crf_predict="auto",
         max_empty_chunk_ratio=1.0,
         auto_negative_sampling=False,
+        low_memory_ans=True,
         max_document_chars=None,
         bio_tagging=False,
         #
@@ -341,9 +344,8 @@ def get_default_config():
         delim_tokens="",
         s2s_decoder_max_length=512,
         num_fusion_shards=None,
-        chunk_pos_embed=None, 
+        chunk_pos_embed=None,
         fusion_low_memory=True,
-
         include_bos_eos=True,
         #
         # Line Items
@@ -353,12 +355,23 @@ def get_default_config():
         next_token_loss_weight=1,
         seq_loss_weight=1,
         group_loss_weight=200,
-
         n_groups=100,
         group_hidden_size=768,
         group_attention_heads=12,
         group_n_layers=3,
         group_thresh=0.8,
+        # Table model
+        table_position=False,
+        table_position_type="row_col",
+        include_row_col_summaries=False,
+        down_project_feats=False,
+        renorm_after_class_weights=True,
+        max_row_col_embedding=1024,
+        chunk_tables=False,
+        table_batching=False,
+        # chunking_tweaks
+        reshuffle_chunks=False,
+        predict_chunk_markers=False,
         #
         # Serialize finetune version with model
         version=VERSION,

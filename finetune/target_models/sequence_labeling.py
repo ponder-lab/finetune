@@ -1,4 +1,3 @@
-import itertools
 import copy
 import os
 from collections import Counter, defaultdict
@@ -97,16 +96,7 @@ class SequencePipeline(BasePipeline):
         target_shape = (
             [None, self.label_encoder.target_dim] if self.multi_label else [None]
         )
-        return (
-            (
-                types,
-                tf.float32,
-            ),
-            (
-                shapes,
-                TS(target_shape),
-            ),
-        )
+        return ((types, tf.float32), (shapes, TS(target_shape)))
 
     def _target_encoder(self):
         if self.multi_label:
@@ -268,7 +258,9 @@ class SequenceLabeler(BaseModel):
             self.saver = None
             model_copy = copy.deepcopy(self)
             if model_copy.config.tensorboard_folder:
-                model_copy.config.tensorboard_folder = os.path.join(model_copy.config.tensorboard_folder, "ans_run")
+                model_copy.config.tensorboard_folder = os.path.join(
+                    model_copy.config.tensorboard_folder, "ans_run"
+                )
             model_copy._initialize()
             model_copy.input_pipeline.total_epoch_offset = self.config.n_epochs
             self.input_pipeline.current_epoch_offset = self.config.n_epochs
@@ -277,6 +269,8 @@ class SequenceLabeler(BaseModel):
             # Train model with only positive chunks
             model_copy.config.max_empty_chunk_ratio = 0.0
             model_copy.config.auto_negative_sampling = False
+            # Cannot have anything that changes pred format here.
+            model_copy.config.predict_chunk_markers = False
             model_copy.finetune(Xs, Y=Y, context=context, update_hook=update_hook)
             initial_run_preds = []
 
@@ -286,10 +280,14 @@ class SequenceLabeler(BaseModel):
             approx_chunks_per_doc = approx_max_tokens_per_doc / (
                 self.config.max_length - self.input_pipeline.chunker.total_context_width
             )
-            outer_batch_size = min(
-                max(int(self.config.predict_batch_size / approx_chunks_per_doc), 1),
-                self.config.predict_batch_size,
-            )
+
+            if self.config.low_memory_ans:
+                outer_batch_size = min(
+                    max(int(self.config.predict_batch_size / approx_chunks_per_doc), 1),
+                    self.config.predict_batch_size,
+                )
+            else:
+                outer_batch_size = len(Xs)
 
             with self.cached_predict():
                 for b_start in range(0, len(Xs), outer_batch_size):
@@ -516,12 +514,31 @@ class SequenceLabeler(BaseModel):
                 doc_idx += 1
                 last_end = 0
                 doc_level_probas = []
+                chunk_spans = []
 
             label_seq = label_seq[start:end]
             end_of_token_seq = token_end_idx[start:end]
             start_of_token_seq = token_start_idx[start:end]
             proba_seq = proba_seq[start:end]
 
+            tok_starts_useful_chunk = [i for i in token_start_idx[start:] if i != -1]
+            if len(tok_starts_useful_chunk) == 0:
+                if chunk_spans:
+                    chunk_start_char_idx = chunk_spans[-1]["end"]
+                else:
+                    chunk_start_char_idx = 0
+                # This is a 0 length span here.
+                chunk_spans.append(
+                    {"start": chunk_start_char_idx, "end": chunk_start_char_idx}
+                )
+            else:
+                chunk_spans.append(
+                    {
+                        # This indexing is done like this because end may be > len(token_end_idx) and is intended to be used only for slicing.
+                        "start": int(tok_starts_useful_chunk[0]),
+                        "end": int(max(token_end_idx[:end])),  # Max to dodge the -1s
+                    }
+                )
             proba_seq_masked = proba_seq.copy()
 
             for il, label in enumerate(label_seq):
@@ -529,7 +546,10 @@ class SequenceLabeler(BaseModel):
                 if label in classes:
                     label_idx = classes.index(label)
                     proba_seq_masked[il:, label_idx] = 0.0
-            doc_level_probas.append(np.max(proba_seq_masked, axis=0))
+            if proba_seq_masked.shape[0] == 0:
+                doc_level_probas.append(0)
+            else:
+                doc_level_probas.append(np.max(proba_seq_masked, axis=0))
 
             for label, start_idx, end_idx, proba in zip(
                 label_seq, start_of_token_seq, end_of_token_seq, proba_seq
@@ -644,7 +664,10 @@ class SequenceLabeler(BaseModel):
                             ),
                         }
                     )
-
+                elif self.config.predict_chunk_markers:
+                    doc_annotations.append(
+                        {"prediction": doc_annotations_sample[0], "chunks": chunk_spans}
+                    )
                 else:
                     doc_annotations.append(doc_annotations_sample[0])
         return doc_annotations

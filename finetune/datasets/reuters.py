@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from finetune import SequenceLabeler
 from finetune.datasets import Dataset
 from finetune.base_models import GPT, GPT2, TCN, RoBERTa
+from finetune.base_models.huggingface.models import HFDebertaV3Base
 from finetune.encoding.sequence_encoder import finetune_to_indico_sequence
 from finetune.util.metrics import annotation_report, sequence_labeling_token_confusion
 

@@ -2,7 +2,6 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import sys
-import warnings
 import re
 
 import joblib
@@ -270,6 +269,7 @@ class Saver:
                     saved_var = variables_sv[name]
                 elif name in self.fallback.keys():
                     saved_var = self.fallback[name]
+                                
                 if saved_var is not None:
                     if self.add_tokens and name == "model/featurizer/shared/shared/weight:0":
                         if var.shape[0] != saved_var.shape[0]:

@@ -1,7 +1,7 @@
 #include "ra.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/platform/default/logging.h"
+#include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/register_types.h"
 
@@ -34,7 +34,7 @@ REGISTER_OP("RecursiveAgg")
     shape_inference::DimensionHandle depth_dim = c->MakeDim(output_depth);
     c->set_output(0, c->MakeShape({samples, length, depth_dim, units}));
     c->set_output(1, c->MakeShape({samples, length, depth_dim, units}));
-    return Status::OK();
+    return Status();
   });
 
 /*

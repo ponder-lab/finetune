@@ -10,8 +10,19 @@ from finetune.base_models.bert.encoder import (
     LayoutLMEncoder,
 )
 
-from finetune.base_models.bert.roberta_encoder import RoBERTaEncoder, RoBERTaEncoderV2
-from finetune.base_models.bert.featurizer import bert_featurizer, layoutlm_featurizer
+from finetune.base_models.bert.roberta_encoder import (
+    RoBERTaEncoder,
+    RoBERTaEncoderV2,
+    RoBERTaEncoderXDoc,
+)
+from finetune.base_models.bert.featurizer import (
+    bert_featurizer,
+    layoutlm_featurizer,
+    xdoc_featurizer,
+    table_roberta_featurizer_twinbert,
+)
+
+from finetune.util.context_utils import get_context_layoutlm, get_context_doc_rep
 from finetune.util.download import (
     BERT_BASE_URL,
     GPT2_BASE_URL,
@@ -46,7 +57,7 @@ BERT_LARGE_PARAMS = {
     "lr": 1e-5,
     "l2_reg": 0.01,
     "bert_intermediate_size": 4096,
-    "max_length": 1024,
+    "max_length": 512,
 }
 
 DISTIL_BERT_PARAMS = {
@@ -258,17 +269,14 @@ class FusedRoBERTa(RoBERTa):
     featurizer = fused_featurizer(bert_featurizer)
     settings = dict(RoBERTa.settings)
     settings.update(
-        {
-            "max_length": 2048,
-            "num_fusion_shards": 4,
-            "chunk_long_sequences": False,
-        }
+        {"max_length": 2048, "num_fusion_shards": 4, "chunk_long_sequences": False}
     )
 
 
 class DocRep(_BaseBert):
     encoder = RoBERTaEncoderV2
     featurizer = bert_featurizer
+    get_context_fn = get_context_doc_rep
     is_roberta = True
     settings = dict(RoBERTa.settings)
     settings.update(
@@ -279,12 +287,7 @@ class DocRep(_BaseBert):
             "context_channels": 192,
             "crf_sequence_labeling": False,
             "context_dim": 4,
-            "default_context": {
-                "left": 0,
-                "right": 0,
-                "top": 0,
-                "bottom": 0,
-            },
+            "default_context": {"left": 0, "right": 0, "top": 0, "bottom": 0},
             "use_auxiliary_info": True,
             "low_memory_mode": True,
             "base_model_path": os.path.join("bert", "doc_rep_v1.jl"),
@@ -324,11 +327,7 @@ class FusedDocRep(DocRep):
     featurizer = fused_featurizer(bert_featurizer)
     settings = dict(DocRep.settings)
     settings.update(
-        {
-            "max_length": 2048,
-            "num_fusion_shards": 4,
-            "chunk_long_sequences": False,
-        }
+        {"max_length": 2048, "num_fusion_shards": 4, "chunk_long_sequences": False}
     )
 
 
@@ -420,6 +419,7 @@ class DistilRoBERTa(_BaseBert):
 class LayoutLM(_BaseBert):
     encoder = LayoutLMEncoder
     featurizer = layoutlm_featurizer
+    get_context_fn = get_context_layoutlm
     settings = {
         **BERT_BASE_PARAMS,
         "epsilon": 1e-8,
@@ -427,12 +427,7 @@ class LayoutLM(_BaseBert):
         "context_injection": True,
         "crf_sequence_labeling": False,
         "context_dim": 4,
-        "default_context": {
-            "left": 0,
-            "right": 0,
-            "top": 0,
-            "bottom": 0,
-        },
+        "default_context": {"left": 0, "right": 0, "top": 0, "bottom": 0},
         "use_auxiliary_info": True,
         "low_memory_mode": True,
         "base_model_path": os.path.join("bert", "layoutlm-base-uncased.jl"),
@@ -450,5 +445,109 @@ class LayoutLM(_BaseBert):
                 FINETUNE_BASE_FOLDER, "model", "bert", "layoutlm_vocab.txt"
             ),
             "url": urljoin(LAYOUTLM_BASE_URL, "layoutlm_vocab.txt"),
+        },
+    ]
+
+
+class XDocBase(_BaseBert):
+    featurizer = xdoc_featurizer
+    encoder = RoBERTaEncoderXDoc
+    get_context_fn = get_context_layoutlm
+    is_roberta = False
+    settings = {
+        **BERT_BASE_PARAMS,
+        "epsilon": 1e-8,
+        "lr": 1e-4,
+        "context_injection": True,
+        "crf_sequence_labeling": False,
+        "context_dim": 4,
+        "default_context": {"left": 0, "right": 0, "top": 0, "bottom": 0},
+        "use_auxiliary_info": True,
+        "low_memory_mode": True,
+        "base_model_path": os.path.join("bert", "XDoc.jl"),
+        "act_fn": "hf_gelu",
+    }
+    required_files = [
+        {
+            "file": os.path.join(FINETUNE_BASE_FOLDER, "model", "bert", "XDoc.jl"),
+            "url": urljoin(ROBERTA_BASE_URL, "XDoc.jl"),
+        },
+        {
+            "file": os.path.join(FINETUNE_BASE_FOLDER, "model", "bert", "dict.txt"),
+            "url": urljoin(ROBERTA_BASE_URL, "dict.txt"),
+        },
+        {
+            "file": os.path.join(
+                FINETUNE_BASE_FOLDER, "model", "bert", "roberta_vocab.bpe"
+            ),
+            "url": urljoin(ROBERTA_BASE_URL, "roberta_vocab.bpe"),
+        },
+        {
+            "file": os.path.join(
+                FINETUNE_BASE_FOLDER, "model", "bert", "roberta_encoder.json"
+            ),
+            "url": urljoin(ROBERTA_BASE_URL, "roberta_encoder.json"),
+        },
+    ]
+
+    @classmethod
+    def get_encoder(cls, config=None, **kwargs):
+        return cls.encoder(**kwargs)
+
+
+class TableRoBERTa(_BaseBert):
+    encoder = RoBERTaEncoderV2
+    is_roberta = True
+    featurizer = table_roberta_featurizer_twinbert
+    settings = {
+        **BERT_BASE_PARAMS,
+        # Just incase all cells fall into the same buckets this -8 allows us to pack the batches much tighter once we add EOS and BOS
+        "max_length": 2048 - 8,
+        "table_batching": True,
+        "chunk_tables": True,
+        "batch_size": 2,  # When table batching is true this becomes a nominal batch size. Very long docs have batch size = 1
+        "class_weights": None,
+        "n_epochs": 24,
+        "epsilon": 1e-8,
+        "lr": 1e-4,
+        "context_injection": True,
+        "crf_sequence_labeling": True,
+        "context_dim": 4,
+        "default_context": {
+            "end_col": -1,
+            "start_col": -1,
+            "end_row": -1,
+            "start_row": -1,
+        },
+        "use_auxiliary_info": True,
+        "low_memory_mode": True,
+        "base_model_path": os.path.join("bert", "roberta-table-twinbert-v1.jl"),
+        "bert_use_pooler": False,
+        "chunk_long_sequences": False,
+        "include_bos_eos": False,
+        "permit_uninitialized": r"mixing_fn_|pos_|kernel|bias",  # TODO: this can be refined.
+    }
+    required_files = [
+        {
+            "file": os.path.join(
+                FINETUNE_BASE_FOLDER, "model", "bert", "roberta-table-twinbert-v1.jl"
+            ),
+            "url": urljoin(ROBERTA_BASE_URL, "roberta-table-twinbert-v1.jl"),
+        },
+        {
+            "file": os.path.join(FINETUNE_BASE_FOLDER, "model", "bert", "dict.txt"),
+            "url": urljoin(ROBERTA_BASE_URL, "dict.txt"),
+        },
+        {
+            "file": os.path.join(
+                FINETUNE_BASE_FOLDER, "model", "bert", "roberta_vocab.bpe"
+            ),
+            "url": urljoin(ROBERTA_BASE_URL, "roberta_vocab.bpe"),
+        },
+        {
+            "file": os.path.join(
+                FINETUNE_BASE_FOLDER, "model", "bert", "roberta_encoder.json"
+            ),
+            "url": urljoin(ROBERTA_BASE_URL, "roberta_encoder.json"),
         },
     ]

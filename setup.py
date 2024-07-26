@@ -11,7 +11,7 @@ from setuptools.command.build_ext import build_ext
 REQUIREMENTS = [
     "pandas>=0.23.1",
     "tqdm>=4.0.0",
-    "numpy>=1.18.4",
+    "numpy>=1.18.4,<1.24.0",
     "scipy>=1.1.0",
     "scikit-learn>=1.0.2",
     "ftfy>=4.4.0",
@@ -24,11 +24,11 @@ REQUIREMENTS = [
     "lxml>=4.3.3",
     "sentencepiece>=0.1.83",
     "tabulate>=0.8.6,<0.9.0",
-    "tensorflow-addons==0.16.1",
-    "tensorflow-estimator==2.7.0",
+    "tensorflow-addons==0.23.0",
+    "tensorflow-estimator==2.15.0",
     "tqdl==0.0.4",
     "psutil==5.7.0",
-    "transformers==4.5.1",
+    "transformers==4.36.2",
 ]
 
 
@@ -48,11 +48,11 @@ class OpsBuild(build_ext):
 setup(
     name="finetune",
     packages=find_packages(exclude=["tests", "tests.*"]),
-    version="0.9.0",
+    version="0.10.1",
     install_requires=REQUIREMENTS,
     extras_require={
-        "tf": ["tensorflow==2.7.1"],
-        "tf_gpu": ["tensorflow-gpu==2.7.1"],
+        "tf": ["tensorflow==2.11.0"],
+        "tf_gpu": ["tensorflow-gpu==2.11.0"],
     },
     zip_safe=False,
     cmdclass={"build_ext": OpsBuild},
